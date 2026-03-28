@@ -17,7 +17,7 @@ readme = "README.md"
 adk-core.workspace = true
 
 # Async runtime
-tokio = { workspace = true, features = ["sync", "net"] }
+tokio = { workspace = true, features = ["sync", "net", "time", "rt"] }
 async-trait.workspace = true
 futures.workspace = true
 async-stream.workspace = true
@@ -55,7 +55,7 @@ getrandom = { version = "0.3", optional = true }
 adk-gemini = { workspace = true, optional = true }
 
 # Vertex AI Live (optional)
-google-cloud-auth = { version = "1.8", optional = true, default-features = false, features = ["default-rustls-provider"] }
+google-cloud-auth = { version = "1.4", optional = true, default-features = false, features = ["default-rustls-provider"] }
 
 # LiveKit bridge (optional)
 livekit = { version = "0.7", optional = true }
@@ -70,10 +70,20 @@ audiopus = { version = "0.3.0-rc.0", optional = true }
 reqwest = { workspace = true, optional = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["rt", "macros", "test-util"] }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "test-util"] }
 dotenvy = "0.15"
 proptest = "1.5"
 url = "2.5"
+anyhow = "1.0"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[[example]]
+name = "openai_session_update"
+required-features = ["openai"]
+
+[[example]]
+name = "gemini_context_mutation"
+required-features = ["gemini"]
 
 [[example]]
 name = "vertex_live_voice"
