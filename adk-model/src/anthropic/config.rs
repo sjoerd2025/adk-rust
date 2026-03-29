@@ -1,5 +1,6 @@
 //! Configuration types for Anthropic provider.
 
+use adk_anthropic::ToolSearchConfig;
 use serde::{Deserialize, Serialize};
 
 /// Thinking mode configuration for Anthropic models.
@@ -46,9 +47,9 @@ pub enum Effort {
 /// let config = AnthropicConfig::new("sk-ant-xxx", "claude-sonnet-4-5")
 ///     .with_thinking_mode(ThinkingMode::Enabled { budget_tokens: 8192 });
 ///
-/// // Prompt caching
+/// // Prompt caching (enabled by default, can be disabled)
 /// let config = AnthropicConfig::new("sk-ant-xxx", "claude-sonnet-4-6")
-///     .with_prompt_caching(true);
+///     .with_prompt_caching(false); // opt out
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnthropicConfig {
@@ -64,7 +65,11 @@ pub struct AnthropicConfig {
     pub base_url: Option<String>,
 
     /// Enable prompt caching with `cache_control` blocks.
-    #[serde(default)]
+    ///
+    /// Defaults to `true`. Anthropic prompt caching reduces costs and latency
+    /// by reusing previously processed context. Disable with
+    /// [`with_prompt_caching(false)`](AnthropicConfig::with_prompt_caching).
+    #[serde(default = "default_prompt_caching")]
     pub prompt_caching: bool,
 
     /// Thinking mode configuration.
@@ -105,10 +110,20 @@ pub struct AnthropicConfig {
     /// Custom API version header override.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_version: Option<String>,
+
+    /// Tool search configuration for regex-based dynamic tool discovery.
+    /// When set, only tools whose names match the regex pattern are loaded.
+    /// When `None`, all available tools are loaded.
+    #[serde(skip)]
+    pub tool_search: Option<ToolSearchConfig>,
 }
 
 fn default_max_tokens() -> u32 {
     4096
+}
+
+fn default_prompt_caching() -> bool {
+    true
 }
 
 impl Default for AnthropicConfig {
@@ -118,7 +133,7 @@ impl Default for AnthropicConfig {
             model: "claude-sonnet-4-6".to_string(),
             max_tokens: default_max_tokens(),
             base_url: None,
-            prompt_caching: false,
+            prompt_caching: true,
             thinking: None,
             effort: None,
             fast_mode: false,
@@ -128,6 +143,7 @@ impl Default for AnthropicConfig {
             service_tier: None,
             beta_features: Vec::new(),
             api_version: None,
+            tool_search: None,
         }
     }
 }
@@ -213,6 +229,25 @@ impl AnthropicConfig {
     /// Set a custom API version header.
     pub fn with_api_version(mut self, version: impl Into<String>) -> Self {
         self.api_version = Some(version.into());
+        self
+    }
+
+    /// Set tool search configuration for dynamic tool discovery.
+    ///
+    /// When set, only tools whose names match the regex pattern are loaded per request.
+    /// When not set, all available tools are loaded.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use adk_model::anthropic::AnthropicConfig;
+    /// use adk_anthropic::ToolSearchConfig;
+    ///
+    /// let config = AnthropicConfig::new("sk-ant-xxx", "claude-sonnet-4-6")
+    ///     .with_tool_search(ToolSearchConfig::new("^(search|fetch)_.*"));
+    /// ```
+    pub fn with_tool_search(mut self, config: ToolSearchConfig) -> Self {
+        self.tool_search = Some(config);
         self
     }
 }
