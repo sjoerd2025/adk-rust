@@ -783,7 +783,12 @@ mod tests {
                 assert!(s.contains("You are a coding assistant."));
                 assert!(s.contains("Always respond in Rust."));
             }
-            SystemPrompt::Blocks(_) => panic!("Expected string system prompt"),
+            SystemPrompt::Blocks(blocks) => {
+                let text: String =
+                    blocks.iter().map(|b| b.block.text.as_str()).collect::<Vec<_>>().join("\n");
+                assert!(text.contains("You are a coding assistant."));
+                assert!(text.contains("Always respond in Rust."));
+            }
         }
         // Messages should start with the assistant message
         assert_eq!(params.messages.len(), 2);
@@ -821,7 +826,11 @@ mod tests {
             SystemPrompt::String(s) => {
                 assert_eq!(s, "First system instruction.\nSecond system instruction.");
             }
-            SystemPrompt::Blocks(_) => panic!("Expected string system prompt"),
+            SystemPrompt::Blocks(blocks) => {
+                let text: String =
+                    blocks.iter().map(|b| b.block.text.as_str()).collect::<Vec<_>>().join("");
+                assert_eq!(text, "First system instruction.\nSecond system instruction.");
+            }
         }
     }
 
@@ -875,7 +884,11 @@ mod tests {
         // System should only contain the explicit system content
         match &params.system.unwrap() {
             SystemPrompt::String(s) => assert_eq!(s, "Explicit system."),
-            SystemPrompt::Blocks(_) => panic!("Expected string system prompt"),
+            SystemPrompt::Blocks(blocks) => {
+                let text: String =
+                    blocks.iter().map(|b| b.block.text.as_str()).collect::<Vec<_>>().join("");
+                assert_eq!(text, "Explicit system.");
+            }
         }
         // The user message should remain in messages (not re-routed)
         assert_eq!(params.messages.len(), 2);

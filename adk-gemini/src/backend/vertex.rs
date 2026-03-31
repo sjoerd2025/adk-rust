@@ -84,6 +84,17 @@ impl VertexBackend {
             || normalized.contains("stream error")
     }
 
+    /// Strip fields from the request that Vertex AI doesn't support.
+    ///
+    /// The `includeServerSideToolInvocations` field is only supported by the
+    /// AI Studio REST API (generativelanguage.googleapis.com). Vertex AI
+    /// (aiplatform.googleapis.com) rejects it with `INVALID_ARGUMENT`.
+    fn strip_unsupported_fields(request: &mut GenerateContentRequest) {
+        if let Some(ref mut tc) = request.tool_config {
+            tc.include_server_side_tool_invocations = None;
+        }
+    }
+
     /// Non-streaming generate via REST (fallback when gRPC has transport issues).
     async fn generate_content_rest(
         &self,
@@ -122,6 +133,10 @@ impl GeminiBackend for VertexBackend {
         &self,
         request: GenerateContentRequest,
     ) -> Result<GenerationResponse, Error> {
+        // Strip fields unsupported by Vertex AI before sending.
+        let mut request = request;
+        Self::strip_unsupported_fields(&mut request);
+
         // Try gRPC first, fall back to REST on transport errors.
         let rest_request = request.clone();
         let mut request_value =
@@ -158,6 +173,10 @@ impl GeminiBackend for VertexBackend {
         &self,
         request: GenerateContentRequest,
     ) -> Result<BackendStream<GenerationResponse>, Error> {
+        // Strip fields unsupported by Vertex AI before sending.
+        let mut request = request;
+        Self::strip_unsupported_fields(&mut request);
+
         // Vertex AI REST supports streamGenerateContent with SSE, same as AI Studio.
         let url = Url::parse(&format!(
             "{}/v1/{}:streamGenerateContent?alt=sse",

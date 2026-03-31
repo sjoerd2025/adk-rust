@@ -91,8 +91,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+#### adk-gemini
+- Fixed Gemini 3 built-in tools (Google Search, URL Context) causing truncated responses (#224). `ContentBuilder::build()` now auto-sets `includeServerSideToolInvocations: true` when server-side tools are present, enabling Gemini 3 to return `toolCall`/`toolResponse` parts on AI Studio instead of silently truncating.
+- Fixed Vertex AI 400 error when `includeServerSideToolInvocations` was sent. Vertex AI rejects this field — it handles built-in tools natively. Both the Vertex backend and the Studio backend (when `with_base_url` points at `aiplatform.googleapis.com`) now strip the field before sending.
+
 #### adk-model
 - Fixed `test_server_tool_response_round_trip_as_openai_items` test — JSON fixture had `outcome` fields flattened instead of nested, causing deserialization mismatch with `async-openai` 0.33 structs.
+- Fixed Anthropic system prompt tests (`test_heuristic_skipped_when_explicit_system_exists`, `test_instruction_rerouting_to_system`, `test_multiple_system_entries_concatenated`) that expected `SystemPrompt::String` but received `SystemPrompt::Blocks` after `prompt_caching` default changed to `true`.
+- Fixed `prop_default_config_backward_compatible` property test asserting `prompt_caching` should be `false` — updated to match the actual default of `true`.
 - Removed unused `OutputStatus` import in `responses_convert.rs`.
 - Replaced `drain(..).collect()` with `std::mem::take()` in Anthropic streaming client per clippy `drain_collect` lint.
 
