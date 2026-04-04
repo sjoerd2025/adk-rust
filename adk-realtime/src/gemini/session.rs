@@ -63,7 +63,7 @@ impl GeminiLiveBackend {
     ///
     /// ```rust,ignore
     /// let backend = GeminiLiveBackend::vertex_adc("my-project", "us-central1")?;
-    /// let model = GeminiRealtimeModel::new(backend, "models/gemini-live-2.5-flash-native-audio");
+    /// let model = GeminiRealtimeModel::new(backend, "models/gemini-3.1-flash-live-preview");
     /// ```
     #[cfg(feature = "vertex-live")]
     pub fn vertex_adc(project_id: impl Into<String>, region: impl Into<String>) -> Result<Self> {
@@ -210,9 +210,10 @@ impl GeminiRealtimeSession {
                 let request = url.into_client_request().map_err(|e| {
                     RealtimeError::connection(format!("Failed to create request: {}", e))
                 })?;
-                let (ws, _) = connect_async(request).await.map_err(|e| {
+                let (ws, response) = connect_async(request).await.map_err(|e| {
                     RealtimeError::connection(format!("WebSocket connect error: {}", e))
                 })?;
+                tracing::info!(status = ?response.status(), "Gemini WebSocket handshake successful");
                 ws
             }
             #[cfg(feature = "vertex-live")]
@@ -286,7 +287,7 @@ impl GeminiRealtimeSession {
             audio_buffer: Arc::new(Mutex::new(Vec::new())),
         };
 
-        session.send_setup(model, config).await?;
+        session.send_setup(&model, config).await?;
         Ok(session)
     }
 
@@ -324,6 +325,17 @@ impl GeminiRealtimeSession {
             generation_config["temperature"] = json!(temp);
         }
 
+        if let Some(extra) = &config.extra {
+            if let Some(thinking_level) = extra.get("thinking_level") {
+                if let Some(obj) = generation_config.as_object_mut() {
+                    obj.insert(
+                        "thinkingConfig".to_string(),
+                        json!({ "thinkingLevel": thinking_level }),
+                    );
+                }
+            }
+        }
+
         let system_instruction = config.instruction.map(|text| GeminiContent {
             parts: vec![GeminiPart { text: Some(text), inline_data: None }],
         });
@@ -338,8 +350,6 @@ impl GeminiRealtimeSession {
             .and_then(|val| val.as_str())
             .map(|s| s.to_string());
 
-        // Always attach the config object to explicitly enable the session resumption feature,
-        // even if the handle is currently None.
         let session_resumption = Some(SessionResumptionConfig { handle });
 
         let setup = GeminiClientMessage {
@@ -393,11 +403,15 @@ impl GeminiRealtimeSession {
                     e
                 )))),
             },
-            Some(Ok(Message::Close(_))) => {
+            Some(Ok(Message::Close(close_frame))) => {
+                tracing::error!("WebSocket closed by server: {:?}", close_frame);
                 self.connected.store(false, Ordering::SeqCst);
                 None
             }
-            Some(Ok(_)) => Some(Ok(ServerEvent::Unknown)),
+            Some(Ok(msg)) => {
+                tracing::warn!("Received unhandled tungstenite message: {:?}", msg);
+                Some(Ok(ServerEvent::Unknown))
+            }
             Some(Err(e)) => {
                 self.connected.store(false, Ordering::SeqCst);
                 Some(Err(RealtimeError::connection(format!("Receive error: {}", e))))
@@ -959,5 +973,28 @@ mod tests {
 
         assert_eq!(gemini_parts[0].text.as_deref(), Some("First"));
         assert_eq!(gemini_parts[1].text.as_deref(), Some("Last"));
+    }
+    #[test]
+    fn test_gemini_setup_serialization_includes_model() {
+        let setup = GeminiSetup {
+            model: "models/gemini-2.5-flash-native-audio-latest".to_string(),
+            system_instruction: None,
+            generation_config: None,
+            tools: None,
+            cached_content: None,
+            session_resumption: None,
+        };
+        let wrapper = GeminiClientMessage {
+            setup: Some(setup),
+            realtime_input: None,
+            tool_response: None,
+            client_content: None,
+        };
+        let js = serde_json::to_value(&wrapper).unwrap();
+        let setup_json = js.get("setup").expect("setup missing").as_object().unwrap();
+        assert_eq!(
+            setup_json.get("model").expect("model missing from setup payload").as_str().unwrap(),
+            "models/gemini-2.5-flash-native-audio-latest"
+        );
     }
 }
