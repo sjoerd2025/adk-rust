@@ -124,6 +124,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Runtime SSE errors** (`adk-server`): ADK UI and legacy wrapped transports
+  emit structured runtime error events instead of ending the stream silently;
+  protocol-native AG-UI continues to emit `RUN_ERROR`.
 - **Bounded partial streaming events** (`adk-agent`): incremental LLM events
   no longer repeat the complete request and response payload on every chunk.
   Terminal events retain the existing debug payload, while long histories now
